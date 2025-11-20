@@ -1,0 +1,52 @@
+name: Frontend Deploy
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Build Step
+      run: echo "Building frontend..."
+
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.FRONTEND_HOST }}
+        username: ubuntu
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          # Ensure docker and docker-compose are installed (idempotent)
+          if ! command -v docker &> /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y docker.io docker-compose
+            sudo usermod -aG docker ubuntu
+          fi
+          
+          # Create directory for app
+          mkdir -p ~/uptime-kuma
+          cd ~/uptime-kuma
+          
+          # Create docker-compose.yml
+          cat <<EOF > docker-compose.yml
+          version: '3.3'
+          services:
+            uptime-kuma:
+              image: louislam/uptime-kuma:1
+              container_name: uptime-kuma
+              volumes:
+                - uptime-kuma:/app/data
+              ports:
+                - 3001:3001
+              restart: always
+          volumes:
+            uptime-kuma:
+          EOF
+          
+          # Start application
+          sudo docker-compose up -d
